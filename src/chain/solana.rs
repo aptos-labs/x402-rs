@@ -46,6 +46,8 @@ impl TryFrom<Network> for SolanaChain {
             Network::Polygon => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::Sei => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
             Network::SeiTestnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::Aptos => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
+            Network::AptosTestnet => Err(FacilitatorLocalError::UnsupportedNetwork(None)),
         }
     }
 }
@@ -79,6 +81,9 @@ impl TryFrom<MixedAddress> for SolanaAddress {
                 "expected Solana address".to_string(),
             )),
             MixedAddress::Solana(pubkey) => Ok(Self { pubkey }),
+            MixedAddress::Aptos(_) => Err(FacilitatorLocalError::InvalidAddress(
+                "expected Solana address".to_string(),
+            )),
         }
     }
 }

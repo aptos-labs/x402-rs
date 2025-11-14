@@ -19,6 +19,7 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use solana_sdk::bs58;
 use solana_sdk::pubkey::Pubkey;
+use aptos_types::account_address::AccountAddress;
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -635,7 +636,7 @@ impl From<u64> for TokenAmount {
     }
 }
 
-/// Represents either an EVM address (0x...), or an off-chain address, or Solana address.
+/// Represents either an EVM address (0x...), or an off-chain address, or Solana address, or Aptos address.
 /// The format is used for routing settlement.
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub enum MixedAddress {
@@ -644,6 +645,7 @@ pub enum MixedAddress {
     /// Off-chain address in `^[A-Za-z0-9][A-Za-z0-9-]{0,34}[A-Za-z0-9]$` format.
     Offchain(String),
     Solana(Pubkey),
+    Aptos(AccountAddress),
 }
 
 #[macro_export]
@@ -662,9 +664,25 @@ macro_rules! address_sol {
     };
 }
 
+#[macro_export]
+macro_rules! address_aptos {
+    ($s:literal) => {
+        $crate::types::MixedAddress::Aptos(
+            $s.parse::<$crate::__reexports::aptos_types::account_address::AccountAddress>()
+                .expect("Invalid Aptos address"),
+        )
+    };
+}
+
 impl From<Pubkey> for MixedAddress {
     fn from(value: Pubkey) -> Self {
         MixedAddress::Solana(value)
+    }
+}
+
+impl From<AccountAddress> for MixedAddress {
+    fn from(value: AccountAddress) -> Self {
+        MixedAddress::Aptos(value)
     }
 }
 
@@ -682,6 +700,7 @@ impl TryFrom<MixedAddress> for alloy::primitives::Address {
             MixedAddress::Evm(address) => Ok(address.into()),
             MixedAddress::Offchain(_) => Err(MixedAddressError::NotEvmAddress),
             MixedAddress::Solana(_) => Err(MixedAddressError::NotEvmAddress),
+            MixedAddress::Aptos(_) => Err(MixedAddressError::NotEvmAddress),
         }
     }
 }
@@ -708,6 +727,7 @@ impl TryInto<EvmAddress> for MixedAddress {
             MixedAddress::Evm(address) => Ok(address),
             MixedAddress::Offchain(_) => Err(MixedAddressError::NotEvmAddress),
             MixedAddress::Solana(_) => Err(MixedAddressError::NotEvmAddress),
+            MixedAddress::Aptos(_) => Err(MixedAddressError::NotEvmAddress),
         }
     }
 }
@@ -718,6 +738,7 @@ impl Display for MixedAddress {
             MixedAddress::Evm(address) => write!(f, "{address}"),
             MixedAddress::Offchain(address) => write!(f, "{address}"),
             MixedAddress::Solana(pubkey) => write!(f, "{pubkey}"),
+            MixedAddress::Aptos(account_address) => write!(f, "{}", account_address.to_hex_literal()),
         }
     }
 }
@@ -737,11 +758,15 @@ impl<'de> Deserialize<'de> for MixedAddress {
         if let Ok(addr) = EvmAddress::from_str(&s) {
             return Ok(MixedAddress::Evm(addr));
         }
-        // 2) Solana Pubkey (base58, 32 bytes)
+        // 2) Aptos AccountAddress (0x... 32 bytes, hex)
+        if let Ok(addr) = AccountAddress::from_str(&s) {
+            return Ok(MixedAddress::Aptos(addr));
+        }
+        // 3) Solana Pubkey (base58, 32 bytes)
         if let Ok(pk) = Pubkey::from_str(&s) {
             return Ok(MixedAddress::Solana(pk));
         }
-        // 3) Off-chain address by regex
+        // 4) Off-chain address by regex
         if OFFCHAIN_ADDRESS_REGEX.is_match(&s) {
             return Ok(MixedAddress::Offchain(s));
         }
@@ -758,6 +783,9 @@ impl Serialize for MixedAddress {
             MixedAddress::Evm(addr) => serializer.serialize_str(&addr.to_string()),
             MixedAddress::Offchain(s) => serializer.serialize_str(s),
             MixedAddress::Solana(pubkey) => serializer.serialize_str(pubkey.to_string().as_str()),
+            MixedAddress::Aptos(account_address) => {
+                serializer.serialize_str(&account_address.to_hex_literal())
+            }
         }
     }
 }
@@ -767,6 +795,8 @@ pub enum TransactionHash {
     /// A 32-byte EVM transaction hash, encoded as 0x-prefixed hex string.
     Evm([u8; 32]),
     Solana([u8; 64]),
+    /// A 32-byte Aptos transaction hash, encoded as 0x-prefixed hex string.
+    Aptos([u8; 32]),
 }
 
 impl<'de> Deserialize<'de> for TransactionHash {
@@ -809,6 +839,10 @@ impl Serialize for TransactionHash {
                 let b58_string = bs58::encode(bytes).into_string();
                 serializer.serialize_str(&b58_string)
             }
+            TransactionHash::Aptos(bytes) => {
+                let hex_string = format!("0x{}", hex::encode(bytes));
+                serializer.serialize_str(&hex_string)
+            }
         }
     }
 }
@@ -821,6 +855,9 @@ impl Display for TransactionHash {
             }
             TransactionHash::Solana(bytes) => {
                 write!(f, "{}", bs58::encode(bytes).into_string())
+            }
+            TransactionHash::Aptos(bytes) => {
+                write!(f, "0x{}", hex::encode(bytes))
             }
         }
     }
