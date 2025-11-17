@@ -33,4 +33,5 @@ pub mod types;
 pub mod __reexports {
     pub use alloy;
     pub use solana_sdk;
+    pub use aptos_types;
 }

@@ -51,6 +51,12 @@ pub enum Network {
     /// Sei testnet (chain ID 1328).
     #[serde(rename = "sei-testnet")]
     SeiTestnet,
+    /// Aptos Mainnet (chain ID 1).
+    #[serde(rename = "aptos")]
+    Aptos,
+    /// Aptos Testnet (chain ID 2).
+    #[serde(rename = "aptos-testnet")]
+    AptosTestnet,
 }
 
 impl Display for Network {
@@ -67,6 +73,8 @@ impl Display for Network {
             Network::Polygon => write!(f, "polygon"),
             Network::Sei => write!(f, "sei"),
             Network::SeiTestnet => write!(f, "sei-testnet"),
+            Network::Aptos => write!(f, "aptos"),
+            Network::AptosTestnet => write!(f, "aptos-testnet"),
         }
     }
 }
@@ -75,6 +83,7 @@ impl Display for Network {
 pub enum NetworkFamily {
     Evm,
     Solana,
+    Aptos,
 }
 
 impl From<Network> for NetworkFamily {
@@ -91,6 +100,8 @@ impl From<Network> for NetworkFamily {
             Network::Polygon => NetworkFamily::Evm,
             Network::Sei => NetworkFamily::Evm,
             Network::SeiTestnet => NetworkFamily::Evm,
+            Network::Aptos => NetworkFamily::Aptos,
+            Network::AptosTestnet => NetworkFamily::Aptos,
         }
     }
 }
@@ -110,6 +121,8 @@ impl Network {
             Network::Polygon,
             Network::Sei,
             Network::SeiTestnet,
+            Network::Aptos,
+            Network::AptosTestnet,
         ]
     }
 }
@@ -275,6 +288,37 @@ static USDC_SEI_TESTNET: Lazy<USDCDeployment> = Lazy::new(|| {
     })
 });
 
+static USDC_APTOS: Lazy<USDCDeployment> = Lazy::new(|| {
+    use aptos_types::account_address::AccountAddress;
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: MixedAddress::Aptos(
+                AccountAddress::from_str("0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b")
+                    .unwrap(),
+            ),
+            network: Network::Aptos,
+        },
+        decimals: 6,
+        eip712: None,
+    })
+});
+
+/// Lazily initialized known USDC deployment on Aptos testnet as [`USDCDeployment`].
+static USDC_APTOS_TESTNET: Lazy<USDCDeployment> = Lazy::new(|| {
+    use aptos_types::account_address::AccountAddress;
+    USDCDeployment(TokenDeployment {
+        asset: TokenAsset {
+            address: MixedAddress::Aptos(
+                AccountAddress::from_str("0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832")
+                    .unwrap(),
+            ),
+            network: Network::AptosTestnet,
+        },
+        decimals: 6,
+        eip712: None,
+    })
+});
+
 /// A known USDC deployment as a wrapper around [`TokenDeployment`].
 #[derive(Clone, Debug)]
 pub struct USDCDeployment(pub TokenDeployment);
@@ -322,6 +366,8 @@ impl USDCDeployment {
             Network::Polygon => &USDC_POLYGON,
             Network::Sei => &USDC_SEI,
             Network::SeiTestnet => &USDC_SEI_TESTNET,
+            Network::Aptos => &USDC_APTOS,
+            Network::AptosTestnet => &USDC_APTOS_TESTNET,
         }
     }
 }
