@@ -283,10 +283,19 @@ pub struct ExactSolanaPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExactAptosPayload {
+    pub transaction: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sponsored: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ExactPaymentPayload {
     Evm(ExactEvmPayload),
     Solana(ExactSolanaPayload),
+    Aptos(ExactAptosPayload),
 }
 
 /// Describes a signed request to transfer a specific amount of funds on-chain.

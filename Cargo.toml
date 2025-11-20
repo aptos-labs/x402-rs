@@ -59,6 +59,9 @@ opentelemetry-stdout = { version = "0.30.0", features = ["trace", "metrics"] }
 [features]
 telemetry = []
 
+[dev-dependencies]
+x402-reqwest = { path = "crates/x402-reqwest" }
+
 [workspace]
 members = [
   "crates/x402-axum",
