@@ -233,18 +233,13 @@ impl Facilitator for AptosProvider {
             function_name
         );
 
-        // Check if it's the standard aptos_account::transfer or primary_fungible_store::transfer
-        let is_aptos_transfer = module.address() == &AccountAddress::ONE
-            && module.name().as_str() == "aptos_account"
-            && function_name.as_str() == "transfer";
-
         let is_fungible_transfer = module.address() == &AccountAddress::ONE
             && module.name().as_str() == "primary_fungible_store"
             && function_name.as_str() == "transfer";
 
-        if !is_aptos_transfer && !is_fungible_transfer {
+        if !is_fungible_transfer {
             tracing::warn!(
-                "Invalid function: {}::{}::{}",
+                "Invalid function: {}::{}::{}, only primary_fungible_store::transfer is supported",
                 module.address(),
                 module.name(),
                 function_name
@@ -255,132 +250,79 @@ impl Facilitator for AptosProvider {
             });
         }
 
-        // Extract and verify arguments based on function type
+        // Extract and verify arguments for primary_fungible_store::transfer
+        // Expected: (fa_address: Object<T>, recipient: address, amount: u64)
         let args = entry_function.args();
 
-        if is_aptos_transfer {
-            // For aptos_account::transfer: (recipient: address, amount: u64)
-            if args.len() != 2 {
-                tracing::warn!("Invalid arguments length for aptos_account::transfer");
-                return Ok(VerifyResponse::Invalid {
-                    reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
-                    payer: Some(sender_mixed),
-                });
-            }
+        if args.len() != 3 {
+            tracing::warn!("Invalid arguments length for primary_fungible_store::transfer");
+            return Ok(VerifyResponse::Invalid {
+                reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
+                payer: Some(sender_mixed),
+            });
+        }
 
-            // Parse recipient address
-            let recipient: AccountAddress = bcs::from_bytes(&args[0]).map_err(|e| {
-                FacilitatorLocalError::DecodingError(format!("Failed to parse recipient: {}", e))
-            })?;
+        // Parse FA address
+        let fa_address: AccountAddress = bcs::from_bytes(&args[0]).map_err(|e| {
+            FacilitatorLocalError::DecodingError(format!("Failed to parse FA address: {}", e))
+        })?;
 
-            // Parse amount
-            let amount: u64 = bcs::from_bytes(&args[1]).map_err(|e| {
-                FacilitatorLocalError::DecodingError(format!("Failed to parse amount: {}", e))
-            })?;
+        // Parse recipient address
+        let recipient: AccountAddress = bcs::from_bytes(&args[1]).map_err(|e| {
+            FacilitatorLocalError::DecodingError(format!("Failed to parse recipient: {}", e))
+        })?;
 
-            // Verify recipient matches requirements
-            let expected_recipient: AccountAddress =
-                AptosAddress::try_from(request.payment_requirements.pay_to.clone())?.into();
+        // Parse amount
+        let amount: u64 = bcs::from_bytes(&args[2]).map_err(|e| {
+            FacilitatorLocalError::DecodingError(format!("Failed to parse amount: {}", e))
+        })?;
 
-            if recipient != expected_recipient {
-                tracing::warn!(
-                    "Recipient mismatch: got {}, expected {}",
-                    recipient,
-                    expected_recipient
-                );
-                return Ok(VerifyResponse::Invalid {
-                    reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
-                    payer: Some(sender_mixed),
-                });
-            }
+        // Verify FA address matches requirements
+        let expected_asset: AccountAddress =
+            AptosAddress::try_from(request.payment_requirements.asset.clone())?.into();
 
-            // Verify amount matches requirements
-            let amount_token = crate::types::TokenAmount::from(amount);
-            let expected_amount = &request.payment_requirements.max_amount_required;
+        if fa_address != expected_asset {
+            tracing::warn!(
+                "Asset mismatch: got {}, expected {}",
+                fa_address,
+                expected_asset
+            );
+            return Ok(VerifyResponse::Invalid {
+                reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
+                payer: Some(sender_mixed),
+            });
+        }
 
-            if amount_token != *expected_amount {
-                tracing::warn!(
-                    "Amount mismatch: got {}, expected {}",
-                    amount,
-                    expected_amount
-                );
-                return Ok(VerifyResponse::Invalid {
-                    reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
-                    payer: Some(sender_mixed),
-                });
-            }
-        } else if is_fungible_transfer {
-            // For primary_fungible_store::transfer: (fa_address: Object<T>, recipient: address, amount: u64)
-            if args.len() != 3 {
-                tracing::warn!("Invalid arguments length for primary_fungible_store::transfer");
-                return Ok(VerifyResponse::Invalid {
-                    reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
-                    payer: Some(sender_mixed),
-                });
-            }
+        // Verify recipient matches requirements
+        let expected_recipient: AccountAddress =
+            AptosAddress::try_from(request.payment_requirements.pay_to.clone())?.into();
 
-            // Parse FA address
-            let fa_address: AccountAddress = bcs::from_bytes(&args[0]).map_err(|e| {
-                FacilitatorLocalError::DecodingError(format!("Failed to parse FA address: {}", e))
-            })?;
+        if recipient != expected_recipient {
+            tracing::warn!(
+                "Recipient mismatch: got {}, expected {}",
+                recipient,
+                expected_recipient
+            );
+            return Ok(VerifyResponse::Invalid {
+                reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
+                payer: Some(sender_mixed),
+            });
+        }
 
-            // Parse recipient address
-            let recipient: AccountAddress = bcs::from_bytes(&args[1]).map_err(|e| {
-                FacilitatorLocalError::DecodingError(format!("Failed to parse recipient: {}", e))
-            })?;
+        // Verify amount matches requirements
+        let amount_token = crate::types::TokenAmount::from(amount);
+        let expected_amount = &request.payment_requirements.max_amount_required;
 
-            // Parse amount
-            let amount: u64 = bcs::from_bytes(&args[2]).map_err(|e| {
-                FacilitatorLocalError::DecodingError(format!("Failed to parse amount: {}", e))
-            })?;
-
-            // Verify FA address matches requirements
-            let expected_asset: AccountAddress =
-                AptosAddress::try_from(request.payment_requirements.asset.clone())?.into();
-
-            if fa_address != expected_asset {
-                tracing::warn!(
-                    "Asset mismatch: got {}, expected {}",
-                    fa_address,
-                    expected_asset
-                );
-                return Ok(VerifyResponse::Invalid {
-                    reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
-                    payer: Some(sender_mixed),
-                });
-            }
-
-            // Verify recipient matches requirements
-            let expected_recipient: AccountAddress =
-                AptosAddress::try_from(request.payment_requirements.pay_to.clone())?.into();
-
-            if recipient != expected_recipient {
-                tracing::warn!(
-                    "Recipient mismatch: got {}, expected {}",
-                    recipient,
-                    expected_recipient
-                );
-                return Ok(VerifyResponse::Invalid {
-                    reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
-                    payer: Some(sender_mixed),
-                });
-            }
-
-            // Verify amount matches requirements
-            let amount_token = crate::types::TokenAmount::from(amount);
-            let expected_amount = &request.payment_requirements.max_amount_required;
-
-            if amount_token != *expected_amount {
-                tracing::warn!(
-                    "Amount mismatch: got {}, expected {}",
-                    amount,
-                    expected_amount
-                );
-                return Ok(VerifyResponse::Invalid {
-                    reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
-                    payer: Some(sender_mixed),
-                });
-            }
+        if amount_token != *expected_amount {
+            tracing::warn!(
+                "Amount mismatch: got {}, expected {}",
+                amount,
+                expected_amount
+            );
+            return Ok(VerifyResponse::Invalid {
+                reason: FacilitatorErrorReason::FreeForm("invalid_payment".to_string()),
+                payer: Some(sender_mixed),
+            });
         }
 
         // TODO: Simulate the transaction to ensure it will succeed

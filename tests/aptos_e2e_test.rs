@@ -10,7 +10,7 @@
 /// Set environment variables before running:
 /// ```bash
 /// export APTOS_PRIVATE_KEY=0x...
-/// export RPC_URL_APTOS_TESTNET=https://fullnode.testnet.aptoslabs.com/v1
+/// export RPC_URL_APTOS_TESTNET=https://api.testnet.aptoslabs.com/v1
 /// cargo test aptos_e2e_test -- --nocapture
 /// ```
 
@@ -32,41 +32,28 @@ async fn test_aptos_payment_flow() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => {
             eprintln!("⚠️  Skipping test: APTOS_PRIVATE_KEY not set");
             eprintln!("   To run this test:");
-            eprintln!("   APTOS_PRIVATE_KEY=0x... RPC_URL_APTOS_TESTNET=https://fullnode.testnet.aptoslabs.com/v1 \\");
+            eprintln!("   APTOS_PRIVATE_KEY=0x... RPC_URL_APTOS_TESTNET=https://api.testnet.aptoslabs.com/v1 \\");
             eprintln!("   cargo test aptos_e2e_test -- --ignored --nocapture");
             return Ok(());
         }
     };
 
     let rpc_url = env::var("RPC_URL_APTOS_TESTNET")
-        .unwrap_or_else(|_| "https://fullnode.testnet.aptoslabs.com/v1".to_string());
-
-    println!("🚀 Starting Aptos x402 End-to-End Test\n");
-    println!("📝 Configuration:");
-    println!("   RPC URL: {}", rpc_url);
-    println!("   Network: aptos-testnet\n");
+        .unwrap_or_else(|_| "https://api.testnet.aptoslabs.com/v1".to_string());
 
     // Create Aptos REST client
     let url = url::Url::parse(&rpc_url)?;
     let rest_client = AptosClient::new(url);
 
     // Create sender wallet (client)
-    println!("🔑 Creating sender wallet...");
     use x402_reqwest::chains::aptos::AptosSenderWallet;
     let wallet = AptosSenderWallet::new(&private_key, rest_client.clone())?;
     let sender_address = wallet.address();
-    println!(
-        "   ✅ Sender address: 0x{}",
-        alloy::hex::encode(sender_address.to_vec())
-    );
 
     // Check sender balance
-    let account_info = rest_client.get_account(sender_address).await?.into_inner();
-    println!("   💰 Balance: {} APT (octas)", account_info.sequence_number);
-    println!("   📊 Sequence number: {}\n", account_info.sequence_number);
+    let _account_info = rest_client.get_account(sender_address).await?.into_inner();
 
     // Define payment requirements
-    println!("📋 Creating payment requirements...");
     let recipient = "0x1"; // Standard Aptos account (for testing)
     let amount = "1000"; // 0.00001 APT (1000 octas)
 
@@ -87,27 +74,20 @@ async fn test_aptos_payment_flow() -> Result<(), Box<dyn std::error::Error>> {
         extra: None,
         output_schema: None,
     };
-    println!("   📍 Recipient: {}", recipient);
-    println!("   💵 Amount: {} octas\n", amount);
 
     // Create payment payload (client-side signing)
-    println!("✍️  Creating and signing payment...");
     use x402_reqwest::chains::SenderWallet;
     let payment_payload = wallet
         .payment_payload(payment_requirements.clone())
         .await?;
-    println!("   ✅ Payment signed and serialized\n");
 
     // Create facilitator provider
-    println!("🏪 Initializing facilitator...");
     let aptos_chain = x402_rs::chain::aptos::AptosChain {
         network: Network::AptosTestnet,
     };
     let facilitator = AptosProvider::new(aptos_chain, rest_client.clone());
-    println!("   ✅ Facilitator ready\n");
 
     // Test VERIFY endpoint
-    println!("🔍 Testing VERIFY endpoint...");
     let verify_request = VerifyRequest {
         x402_version: X402Version::V1,
         payment_payload: payment_payload.clone(),
@@ -116,21 +96,15 @@ async fn test_aptos_payment_flow() -> Result<(), Box<dyn std::error::Error>> {
 
     let verify_response = facilitator.verify(&verify_request).await?;
     match verify_response {
-        x402_rs::types::VerifyResponse::Valid { payer } => {
-            println!("   ✅ Payment verified successfully!");
-            println!("   👤 Payer: {}\n", payer);
+        x402_rs::types::VerifyResponse::Valid { .. } => {
+            // Verification successful
         }
-        x402_rs::types::VerifyResponse::Invalid { reason, payer } => {
-            println!("   ❌ Verification failed: {:?}", reason);
-            if let Some(p) = payer {
-                println!("   👤 Payer: {}", p);
-            }
-            return Err("Verification failed".into());
+        x402_rs::types::VerifyResponse::Invalid { reason, .. } => {
+            return Err(format!("Verification failed: {:?}", reason).into());
         }
     }
 
     // Test SETTLE endpoint
-    println!("💳 Testing SETTLE endpoint...");
     let settle_request = SettleRequest {
         x402_version: X402Version::V1,
         payment_payload: payment_payload.clone(),
@@ -138,42 +112,241 @@ async fn test_aptos_payment_flow() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let settle_response = facilitator.settle(&settle_request).await?;
-    if settle_response.success {
-        println!("   ✅ Payment settled successfully!");
-        if let Some(ref tx_hash) = settle_response.transaction {
-            println!("   🔗 Transaction hash: {}", tx_hash);
-        }
-        println!("   🌐 Network: {}", settle_response.network);
-        println!("   👤 Payer: {}\n", settle_response.payer);
-    } else {
-        println!(
-            "   ❌ Settlement failed: {:?}",
-            settle_response.error_reason
-        );
-        return Err("Settlement failed".into());
-    }
+    assert!(settle_response.success, "Settlement should succeed");
+    assert!(settle_response.transaction.is_some(), "Transaction hash should be present");
 
-    // Verify transaction on-chain
-    if let Some(ref tx_hash) = settle_response.transaction {
-        println!("🔎 Verifying transaction on-chain...");
-        let hash_str = tx_hash.to_string();
-        println!(
-            "   📍 Explorer: https://explorer.aptoslabs.com/txn/{}?network=testnet",
-            hash_str
-        );
-        println!("   ⏳ Waiting for confirmation...");
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-        println!("   ✅ Transaction confirmed on-chain\n");
-    }
-
-    println!("✨ All tests passed! ✨");
-    println!("\n📊 Summary:");
-    println!("   ✓ Wallet creation");
-    println!("   ✓ Payment signing");
-    println!("   ✓ Payment verification");
-    println!("   ✓ Payment settlement");
-    println!("   ✓ On-chain confirmation");
+    // Wait for transaction confirmation
+    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
     Ok(())
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_aptos_payment_verification_failure_wrong_recipient(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let private_key = match env::var("APTOS_PRIVATE_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("⚠️  Skipping test: APTOS_PRIVATE_KEY not set");
+            return Ok(());
+        }
+    };
+
+    let rpc_url = env::var("RPC_URL_APTOS_TESTNET")
+        .unwrap_or_else(|_| "https://api.testnet.aptoslabs.com/v1".to_string());
+
+    let url = url::Url::parse(&rpc_url)?;
+    let rest_client = AptosClient::new(url);
+
+    use x402_reqwest::chains::aptos::AptosSenderWallet;
+    let wallet = AptosSenderWallet::new(&private_key, rest_client.clone())?;
+
+    // Create payment requirements with one recipient
+    let correct_recipient = "0x1";
+    let wrong_recipient = "0x2"; // Different recipient
+
+    let payment_requirements_correct = PaymentRequirements {
+        scheme: Scheme::Exact,
+        network: Network::AptosTestnet,
+        asset: MixedAddress::Aptos(
+            aptos_types::account_address::AccountAddress::from_hex_literal("0x1")?,
+        ),
+        pay_to: MixedAddress::Aptos(
+            aptos_types::account_address::AccountAddress::from_hex_literal(correct_recipient)?,
+        ),
+        max_amount_required: x402_rs::types::TokenAmount::from(1000u64),
+        resource: url::Url::parse("https://example.com/test-resource")?,
+        description: "E2E test payment".to_string(),
+        mime_type: "application/json".to_string(),
+        max_timeout_seconds: 60,
+        extra: None,
+        output_schema: None,
+    };
+
+    // Create payment with correct recipient
+    use x402_reqwest::chains::SenderWallet;
+    let payment_payload = wallet
+        .payment_payload(payment_requirements_correct.clone())
+        .await?;
+
+    // But verify with wrong recipient in requirements
+    let payment_requirements_wrong = PaymentRequirements {
+        pay_to: MixedAddress::Aptos(
+            aptos_types::account_address::AccountAddress::from_hex_literal(wrong_recipient)?,
+        ),
+        ..payment_requirements_correct
+    };
+
+    let aptos_chain = x402_rs::chain::aptos::AptosChain {
+        network: Network::AptosTestnet,
+    };
+    let facilitator = AptosProvider::new(aptos_chain, rest_client);
+
+    let verify_request = VerifyRequest {
+        x402_version: X402Version::V1,
+        payment_payload,
+        payment_requirements: payment_requirements_wrong,
+    };
+
+    let verify_response = facilitator.verify(&verify_request).await?;
+    match verify_response {
+        x402_rs::types::VerifyResponse::Invalid { .. } => {
+            // Expected to fail
+            Ok(())
+        }
+        x402_rs::types::VerifyResponse::Valid { .. } => {
+            Err("Verification should have failed with wrong recipient".into())
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_aptos_payment_verification_failure_wrong_amount(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let private_key = match env::var("APTOS_PRIVATE_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("⚠️  Skipping test: APTOS_PRIVATE_KEY not set");
+            return Ok(());
+        }
+    };
+
+    let rpc_url = env::var("RPC_URL_APTOS_TESTNET")
+        .unwrap_or_else(|_| "https://api.testnet.aptoslabs.com/v1".to_string());
+
+    let url = url::Url::parse(&rpc_url)?;
+    let rest_client = AptosClient::new(url);
+
+    use x402_reqwest::chains::aptos::AptosSenderWallet;
+    let wallet = AptosSenderWallet::new(&private_key, rest_client.clone())?;
+
+    // Create payment with one amount
+    let payment_requirements_correct = PaymentRequirements {
+        scheme: Scheme::Exact,
+        network: Network::AptosTestnet,
+        asset: MixedAddress::Aptos(
+            aptos_types::account_address::AccountAddress::from_hex_literal("0x1")?,
+        ),
+        pay_to: MixedAddress::Aptos(
+            aptos_types::account_address::AccountAddress::from_hex_literal("0x1")?,
+        ),
+        max_amount_required: x402_rs::types::TokenAmount::from(1000u64),
+        resource: url::Url::parse("https://example.com/test-resource")?,
+        description: "E2E test payment".to_string(),
+        mime_type: "application/json".to_string(),
+        max_timeout_seconds: 60,
+        extra: None,
+        output_schema: None,
+    };
+
+    use x402_reqwest::chains::SenderWallet;
+    let payment_payload = wallet
+        .payment_payload(payment_requirements_correct.clone())
+        .await?;
+
+    // Verify with different amount
+    let payment_requirements_wrong = PaymentRequirements {
+        max_amount_required: x402_rs::types::TokenAmount::from(2000u64), // Different amount
+        ..payment_requirements_correct
+    };
+
+    let aptos_chain = x402_rs::chain::aptos::AptosChain {
+        network: Network::AptosTestnet,
+    };
+    let facilitator = AptosProvider::new(aptos_chain, rest_client);
+
+    let verify_request = VerifyRequest {
+        x402_version: X402Version::V1,
+        payment_payload,
+        payment_requirements: payment_requirements_wrong,
+    };
+
+    let verify_response = facilitator.verify(&verify_request).await?;
+    match verify_response {
+        x402_rs::types::VerifyResponse::Invalid { .. } => {
+            // Expected to fail
+            Ok(())
+        }
+        x402_rs::types::VerifyResponse::Valid { .. } => {
+            Err("Verification should have failed with wrong amount".into())
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_aptos_payment_verification_failure_wrong_asset(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let private_key = match env::var("APTOS_PRIVATE_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("⚠️  Skipping test: APTOS_PRIVATE_KEY not set");
+            return Ok(());
+        }
+    };
+
+    let rpc_url = env::var("RPC_URL_APTOS_TESTNET")
+        .unwrap_or_else(|_| "https://api.testnet.aptoslabs.com/v1".to_string());
+
+    let url = url::Url::parse(&rpc_url)?;
+    let rest_client = AptosClient::new(url);
+
+    use x402_reqwest::chains::aptos::AptosSenderWallet;
+    let wallet = AptosSenderWallet::new(&private_key, rest_client.clone())?;
+
+    // Create payment with one asset
+    let payment_requirements_correct = PaymentRequirements {
+        scheme: Scheme::Exact,
+        network: Network::AptosTestnet,
+        asset: MixedAddress::Aptos(
+            aptos_types::account_address::AccountAddress::from_hex_literal("0x1")?,
+        ),
+        pay_to: MixedAddress::Aptos(
+            aptos_types::account_address::AccountAddress::from_hex_literal("0x1")?,
+        ),
+        max_amount_required: x402_rs::types::TokenAmount::from(1000u64),
+        resource: url::Url::parse("https://example.com/test-resource")?,
+        description: "E2E test payment".to_string(),
+        mime_type: "application/json".to_string(),
+        max_timeout_seconds: 60,
+        extra: None,
+        output_schema: None,
+    };
+
+    use x402_reqwest::chains::SenderWallet;
+    let payment_payload = wallet
+        .payment_payload(payment_requirements_correct.clone())
+        .await?;
+
+    // Verify with different asset
+    let payment_requirements_wrong = PaymentRequirements {
+        asset: MixedAddress::Aptos(
+            aptos_types::account_address::AccountAddress::from_hex_literal("0x2")?,
+        ), // Different asset
+        ..payment_requirements_correct
+    };
+
+    let aptos_chain = x402_rs::chain::aptos::AptosChain {
+        network: Network::AptosTestnet,
+    };
+    let facilitator = AptosProvider::new(aptos_chain, rest_client);
+
+    let verify_request = VerifyRequest {
+        x402_version: X402Version::V1,
+        payment_payload,
+        payment_requirements: payment_requirements_wrong,
+    };
+
+    let verify_response = facilitator.verify(&verify_request).await?;
+    match verify_response {
+        x402_rs::types::VerifyResponse::Invalid { .. } => {
+            // Expected to fail
+            Ok(())
+        }
+        x402_rs::types::VerifyResponse::Valid { .. } => {
+            Err("Verification should have failed with wrong asset".into())
+        }
+    }
 }

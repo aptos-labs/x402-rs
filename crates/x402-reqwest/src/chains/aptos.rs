@@ -6,8 +6,7 @@ use aptos_types::{
     chain_id::ChainId,
     transaction::{
         authenticator::{AccountAuthenticator, AuthenticationKey},
-        EntryFunction, RawTransaction, SignedTransaction,
-        TransactionPayload,
+        EntryFunction, RawTransaction, TransactionPayload,
     },
 };
 use base64::Engine;
@@ -122,13 +121,19 @@ impl SenderWallet for AptosSenderWallet {
                 X402PaymentsError::SigningError(format!("Failed to parse amount: {}", e))
             })?;
 
-        // Build transaction payload - using standard aptos_account::transfer
+        // Parse FA (Fungible Asset) address
+        let fa_address_str = selected.asset.to_string();
+        let fa_address = AccountAddress::from_str(&fa_address_str).map_err(|e| {
+            X402PaymentsError::SigningError(format!("Failed to parse FA address: {}", e))
+        })?;
+
+        // Build transaction payload - using primary_fungible_store::transfer
         use move_core_types::identifier::Identifier;
         use move_core_types::language_storage::ModuleId;
 
         let module_id = ModuleId::new(
             AccountAddress::ONE,
-            Identifier::new("aptos_account").map_err(|e| {
+            Identifier::new("primary_fungible_store").map_err(|e| {
                 X402PaymentsError::SigningError(format!("Failed to create module id: {}", e))
             })?,
         );
@@ -142,6 +147,9 @@ impl SenderWallet for AptosSenderWallet {
             function_name,
             vec![],
             vec![
+                bcs::to_bytes(&fa_address).map_err(|e| {
+                    X402PaymentsError::SigningError(format!("Failed to serialize FA address: {}", e))
+                })?,
                 bcs::to_bytes(&recipient).map_err(|e| {
                     X402PaymentsError::SigningError(format!("Failed to serialize recipient: {}", e))
                 })?,
