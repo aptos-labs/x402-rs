@@ -85,6 +85,7 @@ See [`x402-reqwest` crate docs](./crates/x402-reqwest/README.md).
 | Server Middleware                   | Provide ready-to-use integration for Rust web frameworks such as axum and tower.                         | ✅ Complete |
 | Client Library                      | Provide a lightweight Rust library for initiating and managing x402 payment flows from Rust clients.     | ✅ Complete |
 | Solana Support                      | Support Solana chain.                                                                                    | ✅ Complete |
+| Aptos Support                       | Support Aptos chain.                                                                                     | 🚧 In Progress |
 | Multiple chains and multiple tokens | Support various tokens and EVM compatible chains.                                                        | ⏳ Planned  |
 | Payment Storage                     | Persist verified and settled payments for analytics, access control, and auditability.                   | 🔜 Planned |
 | Micropayment Support                | Enable fine-grained offchain usage-based payments, including streaming and per-request billing.          | 🔜 Planned |
@@ -117,9 +118,12 @@ HOST=0.0.0.0
 PORT=8080
 RPC_URL_BASE_SEPOLIA=https://sepolia.base.org
 RPC_URL_BASE=https://mainnet.base.org
+RPC_URL_APTOS_TESTNET=https://api.testnet.aptoslabs.com/v1
+RPC_URL_APTOS=https://api.mainnet.aptoslabs.com/v1
 SIGNER_TYPE=private-key
 EVM_PRIVATE_KEY=0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
 SOLANA_PRIVATE_KEY=6ASf5EcmmEHTgDJ4X4ZT5vT6iHVJBXPg5AN5YoTCpGWt
+APTOS_PRIVATE_KEY=0xYourHexPrivateKey
 RUST_LOG=info
 ```
 
@@ -230,6 +234,7 @@ Available variables:
 * `SIGNER_TYPE` (required): Type of signer to use. Only `private-key` is supported now,
 * `EVM_PRIVATE_KEY` (required): Private key in hex for EVM networks, like `0xdeadbeef...`,
 * `SOLANA_PRIVATE_KEY` (required): Private key in hex for Solana networks, like `0xdeadbeef...`,
+* `APTOS_PRIVATE_KEY`: Private key in hex for Aptos networks, like `0x...`,
 * `RPC_URL_BASE_SEPOLIA`: Ethereum RPC endpoint for Base Sepolia testnet,
 * `RPC_URL_BASE`: Ethereum RPC endpoint for Base mainnet,
 * `RPC_URL_AVALANCHE_FUJI`: Ethereum RPC endpoint for Avalanche Fuji testnet,
@@ -240,6 +245,8 @@ Available variables:
 * `RPC_URL_POLYGON_AMOY`: RPC endpoint for Polygon Amoy testnet.
 * `RPC_URL_SEI`: RPC endpoint for Sei mainnet.
 * `RPC_URL_SEI_TESTNET`: RPC endpoint for Sei testnet.
+* `RPC_URL_APTOS`: RPC endpoint for Aptos mainnet.
+* `RPC_URL_APTOS_TESTNET`: RPC endpoint for Aptos testnet.
 
 
 ### Observability
@@ -279,6 +286,8 @@ The Facilitator supports different networks based on the environment variables y
 | Sei Mainnet               | `RPC_URL_SEI`            | ✅                | Mainnet                          |
 | Solana Mainnet            | `RPC_URL_SOLANA`         | ✅                | Mainnet                          |
 | Solana Devnet             | `RPC_URL_SOLANA_DEVNET`  | ✅                | Testnet, Recommended for testing |
+| Aptos Mainnet             | `RPC_URL_APTOS`          | ✅                | Mainnet                          |
+| Aptos Testnet             | `RPC_URL_APTOS_TESTNET`  | ✅                | Testnet                          |
 
 - If you provide say only `RPC_URL_BASE_SEPOLIA`, only **Base Sepolia** will be available.
 - If you provide `RPC_URL_BASE_SEPOLIA`, `RPC_URL_BASE`, and other env variables on the list, then all the specified networks will be supported.
