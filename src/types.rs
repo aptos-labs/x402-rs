@@ -282,12 +282,19 @@ pub struct ExactSolanaPayload {
     pub transaction: String,
 }
 
+/// Helper struct to serialize/deserialize the Aptos transaction payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AptosPayloadJson {
+    pub transaction: Vec<u8>,
+    #[serde(rename = "senderAuthenticator")]
+    pub sender_authenticator: Vec<u8>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExactAptosPayload {
     pub transaction: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sponsored: Option<bool>,
+    // TODO(jill): Add sponsored field when gas station integration is implemented
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

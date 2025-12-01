@@ -14,19 +14,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 use x402_rs::network::NetworkFamily;
 use x402_rs::types::{
-    ExactAptosPayload, ExactPaymentPayload, PaymentPayload, PaymentRequirements, X402Version,
+    AptosPayloadJson, ExactAptosPayload, ExactPaymentPayload, PaymentPayload, PaymentRequirements, X402Version,
 };
 
 use crate::chains::{IntoSenderWallet, SenderWallet};
 use crate::X402PaymentsError;
-
-/// Helper struct to serialize the Aptos transaction payload
-#[derive(serde::Serialize)]
-struct AptosPayloadJson {
-    transaction: Vec<u8>,
-    #[serde(rename = "senderAuthenticator")]
-    sender_authenticator: Vec<u8>,
-}
 
 #[derive(Clone)]
 pub struct AptosSenderWallet {
@@ -230,7 +222,6 @@ impl SenderWallet for AptosSenderWallet {
             network: selected.network,
             payload: ExactPaymentPayload::Aptos(ExactAptosPayload {
                 transaction: base64_transaction,
-                sponsored: None,
             }),
         })
     }

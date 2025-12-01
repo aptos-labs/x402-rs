@@ -10,7 +10,7 @@ use crate::chain::{FacilitatorLocalError, FromEnvByNetworkBuild, NetworkProvider
 use crate::facilitator::Facilitator;
 use crate::network::Network;
 use crate::types::{
-    ExactAptosPayload, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, SettleRequest,
+    AptosPayloadJson, ExactAptosPayload, ExactPaymentPayload, FacilitatorErrorReason, MixedAddress, SettleRequest,
     SettleResponse, SupportedPaymentKind, SupportedPaymentKindsResponse, TransactionHash,
     VerifyRequest, VerifyResponse,
 };
@@ -132,14 +132,6 @@ impl NetworkProviderOps for AptosProvider {
     fn network(&self) -> Network {
         self.chain.network
     }
-}
-
-/// Helper struct to deserialize the Aptos payment payload
-#[derive(serde::Deserialize)]
-struct AptosPayloadJson {
-    transaction: Vec<u8>,
-    #[serde(rename = "senderAuthenticator")]
-    sender_authenticator: Vec<u8>,
 }
 
 /// Deserialize the Aptos transaction from the base64-encoded JSON payload
@@ -357,13 +349,10 @@ impl Facilitator for AptosProvider {
         let sender = raw_txn.sender();
         let sender_mixed = MixedAddress::Aptos(sender);
 
-        // Create signed transaction for submission
-        // Note: Aptos SignedTransaction in the SDK might have different signature requirements
-        // We'll use the aptos-sdk's SignedTransaction type which matches the BCS format
+        // Create signed transaction for submission by combining the raw transaction with its authenticator (signature)
         use aptos_types::transaction::SignedTransaction as AptosSignedTransaction;
         let signed_txn = AptosSignedTransaction::new_single_sender(raw_txn, authenticator);
 
-        // Submit the transaction to the Aptos network using BCS
         tracing::info!("Submitting transaction to Aptos network from sender: {}", sender);
 
         self.rest_client
@@ -374,7 +363,8 @@ impl Facilitator for AptosProvider {
             })?;
 
         // Compute transaction hash for tracking
-        // Hash is computed from the BCS-serialized SignedTransaction
+        // The transaction hash is derived from the BCS-serialized SignedTransaction using SHA3-256.
+        // This hash matches the one assigned to the transaction on-chain once it's committed.
         let signed_txn_bytes = bcs::to_bytes(&signed_txn).map_err(|e| {
             FacilitatorLocalError::ContractCall(format!("Failed to serialize signed transaction: {}", e))
         })?;
