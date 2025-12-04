@@ -7,6 +7,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     libssl-dev \
+    clang \
+    llvm-dev \
+    libclang-dev \
+    libudev-dev \
  && rm -rf /var/lib/apt/lists/*
 
 COPY . ./

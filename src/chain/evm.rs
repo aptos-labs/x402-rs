@@ -894,6 +894,9 @@ async fn assert_valid_payment<P: Provider>(
         ExactPaymentPayload::Solana(_) => {
             return Err(FacilitatorLocalError::UnsupportedNetwork(None));
         }
+        ExactPaymentPayload::Aptos(_) => {
+            return Err(FacilitatorLocalError::UnsupportedNetwork(None));
+        }
     };
     let payer = payment_payload.authorization.from;
     if payload.network != chain.network {

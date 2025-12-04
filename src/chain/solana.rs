@@ -417,6 +417,9 @@ impl SolanaProvider {
             ExactPaymentPayload::Evm(..) => {
                 return Err(FacilitatorLocalError::UnsupportedNetwork(None));
             }
+            ExactPaymentPayload::Aptos(..) => {
+                return Err(FacilitatorLocalError::UnsupportedNetwork(None));
+            }
             ExactPaymentPayload::Solana(payload) => payload,
         };
         if payload.network != self.network() {

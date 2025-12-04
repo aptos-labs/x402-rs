@@ -282,11 +282,27 @@ pub struct ExactSolanaPayload {
     pub transaction: String,
 }
 
+/// Helper struct to serialize/deserialize the Aptos transaction payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AptosPayloadJson {
+    pub transaction: Vec<u8>,
+    #[serde(rename = "senderAuthenticator")]
+    pub sender_authenticator: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExactAptosPayload {
+    pub transaction: String,
+    // TODO(jill): Add sponsored field when gas station integration is implemented
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ExactPaymentPayload {
     Evm(ExactEvmPayload),
     Solana(ExactSolanaPayload),
+    Aptos(ExactAptosPayload),
 }
 
 /// Describes a signed request to transfer a specific amount of funds on-chain.
