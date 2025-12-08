@@ -307,13 +307,61 @@ pub enum ExactPaymentPayload {
 
 /// Describes a signed request to transfer a specific amount of funds on-chain.
 /// Includes the scheme, network, and signed payload contents.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentPayload {
     pub x402_version: X402Version,
     pub scheme: Scheme,
     pub network: Network,
     pub payload: ExactPaymentPayload,
+}
+
+// Custom deserializer that uses the network field to determine the correct payload variant
+impl<'de> serde::Deserialize<'de> for PaymentPayload {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct PaymentPayloadHelper {
+            x402_version: X402Version,
+            scheme: Scheme,
+            network: Network,
+            payload: serde_json::Value,
+        }
+
+        let helper = PaymentPayloadHelper::deserialize(deserializer)?;
+
+        // Deserialize the payload based on the network type
+        let payload = match helper.network {
+            Network::Aptos | Network::AptosTestnet => {
+                let aptos_payload: ExactAptosPayload = serde_json::from_value(helper.payload)
+                    .map_err(|e| D::Error::custom(format!("Failed to deserialize Aptos payload: {}", e)))?;
+                ExactPaymentPayload::Aptos(aptos_payload)
+            }
+            Network::Solana | Network::SolanaDevnet => {
+                let solana_payload: ExactSolanaPayload = serde_json::from_value(helper.payload)
+                    .map_err(|e| D::Error::custom(format!("Failed to deserialize Solana payload: {}", e)))?;
+                ExactPaymentPayload::Solana(solana_payload)
+            }
+            _ => {
+                // For EVM networks, deserialize as EVM payload
+                let evm_payload: ExactEvmPayload = serde_json::from_value(helper.payload)
+                    .map_err(|e| D::Error::custom(format!("Failed to deserialize EVM payload: {}", e)))?;
+                ExactPaymentPayload::Evm(evm_payload)
+            }
+        };
+
+        Ok(PaymentPayload {
+            x402_version: helper.x402_version,
+            scheme: helper.scheme,
+            network: helper.network,
+            payload,
+        })
+    }
 }
 
 /// Error returned when decoding a base64-encoded [`PaymentPayload`] fails.
