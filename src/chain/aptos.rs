@@ -350,30 +350,32 @@ impl Facilitator for AptosProvider {
         let sender_mixed = MixedAddress::Aptos(sender);
 
         // Create signed transaction for submission by combining the raw transaction with its authenticator (signature)
-        use aptos_types::transaction::SignedTransaction as AptosSignedTransaction;
+        use aptos_types::transaction::{SignedTransaction as AptosSignedTransaction, Transaction};
+
         let signed_txn = AptosSignedTransaction::new_single_sender(raw_txn, authenticator);
 
-        tracing::info!("Submitting transaction to Aptos network from sender: {}", sender);
+        use aptos_crypto::hash::CryptoHash;
+        let txn_hash = Transaction::UserTransaction(signed_txn.clone()).hash();
+        let txn_hash_bytes: [u8; 32] = txn_hash.to_vec().try_into().map_err(|_| {
+            FacilitatorLocalError::ContractCall("Invalid transaction hash length".to_string())
+        })?;
 
+        tracing::info!("Submitting transaction to Aptos network from sender: {} with hash: 0x{}",
+            sender,
+            alloy::hex::encode(&txn_hash_bytes)
+        );
+
+        // Submit the transaction
         self.rest_client
             .submit_bcs(&signed_txn)
             .await
             .map_err(|e| {
+                tracing::error!("Transaction submission failed for hash 0x{}: {}",
+                    alloy::hex::encode(&txn_hash_bytes),
+                    e
+                );
                 FacilitatorLocalError::ContractCall(format!("Failed to submit transaction: {}", e))
             })?;
-
-        // Compute transaction hash for tracking
-        // The transaction hash is derived from the BCS-serialized SignedTransaction using SHA3-256.
-        // This hash matches the one assigned to the transaction on-chain once it's committed.
-        let signed_txn_bytes = bcs::to_bytes(&signed_txn).map_err(|e| {
-            FacilitatorLocalError::ContractCall(format!("Failed to serialize signed transaction: {}", e))
-        })?;
-
-        use aptos_crypto::HashValue;
-        let txn_hash = HashValue::sha3_256_of(&signed_txn_bytes);
-        let txn_hash_bytes: [u8; 32] = txn_hash.to_vec().try_into().map_err(|_| {
-            FacilitatorLocalError::ContractCall("Invalid transaction hash length".to_string())
-        })?;
 
         tracing::info!("Transaction submitted successfully with hash: 0x{}", alloy::hex::encode(&txn_hash_bytes));
 
