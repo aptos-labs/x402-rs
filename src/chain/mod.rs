@@ -1,4 +1,5 @@
 mod chain_id;
+pub mod aptos;
 pub mod eip155;
 pub mod solana;
 
@@ -10,6 +11,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum ChainProvider {
+    Aptos(Arc<aptos::AptosChainProvider>),
     Eip155(Arc<eip155::Eip155ChainProvider>),
     Solana(Arc<solana::SolanaChainProvider>),
 }
@@ -17,6 +19,10 @@ pub enum ChainProvider {
 impl ChainProvider {
     pub async fn from_config(config: &ChainConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let provider = match config {
+            ChainConfig::Aptos(config) => {
+                let provider = aptos::AptosChainProvider::from_config(config).await?;
+                ChainProvider::Aptos(Arc::new(provider))
+            }
             ChainConfig::Eip155(config) => {
                 let provider = eip155::Eip155ChainProvider::from_config(config).await?;
                 ChainProvider::Eip155(Arc::new(provider))
@@ -38,6 +44,7 @@ pub trait ChainProviderOps {
 impl ChainProviderOps for ChainProvider {
     fn signer_addresses(&self) -> Vec<String> {
         match self {
+            ChainProvider::Aptos(provider) => provider.signer_addresses(),
             ChainProvider::Eip155(provider) => provider.signer_addresses(),
             ChainProvider::Solana(provider) => provider.signer_addresses(),
         }
@@ -45,6 +52,7 @@ impl ChainProviderOps for ChainProvider {
 
     fn chain_id(&self) -> ChainId {
         match self {
+            ChainProvider::Aptos(provider) => provider.chain_id(),
             ChainProvider::Eip155(provider) => provider.chain_id(),
             ChainProvider::Solana(provider) => provider.chain_id(),
         }

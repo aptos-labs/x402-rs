@@ -59,6 +59,15 @@ spl-token-2022 = { version = "10.0.0" }
 solana-client = { version = "3.1.4" }
 bincode = { version = "1.3.3" } # Older version due to compatibility with solana-sdk
 
+# Aptos
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+aptos-types = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+move-core-types = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+bcs = { version = "0.1" }
+hex = { version = "0.4" }
+
 # Tracing and OpenTelemetry
 tracing = { version = "0.1.41" }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
@@ -77,11 +86,15 @@ futures-util = "0.3.31"
 [features]
 telemetry = []
 
+[patch.crates-io]
+merlin = { git = "https://github.com/aptos-labs/merlin" }
+
 [workspace]
 members = [
   "crates/x402-axum",
   "examples/x402-axum-example",
   "crates/x402-reqwest",
   "examples/x402-reqwest-example",
+  "examples/aptos-e2e",
   "."
 ]

@@ -3,6 +3,7 @@ use x402_rs::types::{PaymentPayload, PaymentRequirements};
 
 use crate::X402PaymentsError;
 
+pub mod aptos;
 pub mod evm;
 pub mod solana;
 
