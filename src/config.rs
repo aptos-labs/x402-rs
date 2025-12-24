@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
 
+use crate::chain::aptos;
 use crate::chain::eip155;
 use crate::chain::solana;
 use crate::chain::{ChainId, ChainIdPattern};
@@ -67,10 +68,12 @@ mod scheme_config_defaults {
 /// Configuration for a specific chain.
 ///
 /// This enum represents chain-specific configuration that varies by chain family
-/// (EVM vs Solana). The chain family is determined by the CAIP-2 prefix of the
-/// chain identifier key (e.g., "eip155:" for EVM, "solana:" for Solana).
+/// (EVM vs Solana vs Aptos). The chain family is determined by the CAIP-2 prefix of the
+/// chain identifier key (e.g., "eip155:" for EVM, "solana:" for Solana, "aptos:" for Aptos).
 #[derive(Debug, Clone)]
 pub enum ChainConfig {
+    /// Aptos chain configuration (for chains with "aptos:" prefix).
+    Aptos(Box<AptosChainConfig>),
     /// EVM chain configuration (for chains with "eip155:" prefix).
     Eip155(Eip155ChainConfig),
     /// Solana chain configuration (for chains with "solana:" prefix).
@@ -407,6 +410,24 @@ impl SolanaChainConfig {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct AptosChainConfig {
+    chain_reference: aptos::AptosChainReference,
+    inner: AptosChainConfigInner,
+}
+
+impl AptosChainConfig {
+    pub fn network(&self) -> String {
+        self.chain_reference.chain_id().to_string()
+    }
+    pub fn rpc_url(&self) -> &String {
+        &self.inner.rpc_url
+    }
+    pub fn private_key(&self) -> &String {
+        &self.inner.private_key
+    }
+}
+
 /// Configuration specific to EVM-compatible chains.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Eip155ChainConfigInner {
@@ -466,6 +487,15 @@ mod solana_chain_config {
     }
 }
 
+/// Configuration specific to Aptos chains.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AptosChainConfigInner {
+    /// RPC URL for Aptos REST API (required).
+    pub rpc_url: String,
+    /// Private key hex string (with or without 0x prefix, required).
+    pub private_key: String,
+}
+
 /// Custom serde module for deserializing the chains map with type discrimination
 /// based on the CAIP-2 chain identifier prefix.
 mod chains_serde {
@@ -483,6 +513,11 @@ mod chains_serde {
         let mut map = serializer.serialize_map(Some(chains.len()))?;
         for chain_config in chains {
             match chain_config {
+                ChainConfig::Aptos(config) => {
+                    let chain_id: ChainId = config.chain_reference.into();
+                    let inner = &config.inner;
+                    map.serialize_entry(&chain_id, inner)?;
+                }
                 ChainConfig::Eip155(config) => {
                     let chain_id: ChainId = config.chain_reference.into();
                     let inner = &config.inner;
@@ -520,6 +555,16 @@ mod chains_serde {
                 while let Some(chain_id) = access.next_key::<ChainId>()? {
                     let namespace = chain_id.namespace();
                     let config = match namespace {
+                        aptos::APTOS_NAMESPACE => {
+                            let inner: AptosChainConfigInner = access.next_value()?;
+                            let config = AptosChainConfig {
+                                chain_reference: chain_id
+                                    .try_into()
+                                    .map_err(|e| serde::de::Error::custom(format!("{}", e)))?,
+                                inner,
+                            };
+                            ChainConfig::Aptos(Box::new(config))
+                        }
                         eip155::EIP155_NAMESPACE => {
                             let inner: Eip155ChainConfigInner = access.next_value()?;
                             let config = Eip155ChainConfig {

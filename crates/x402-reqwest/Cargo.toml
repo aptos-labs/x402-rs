@@ -45,6 +45,15 @@ solana-rpc-client = { version = "3.1.4" }
 spl-associated-token-account = { version = "8.0.0" }
 solana-keypair = { version = "3.1.0" }
 
+# Aptos
+aptos-rest-client = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+aptos-types = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+aptos-crypto = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+move-core-types = { git = "https://github.com/aptos-labs/aptos-core", rev = "fb9e2f4edd387b123c8355474dab2e8e1f4e59dc" }
+bcs = { version = "0.1" }
+base64 = { version = "0.22.1" }
+hex = { version = "0.4" }
+
 # Telemetry
 tracing = { version = "0.1.41" }
 
